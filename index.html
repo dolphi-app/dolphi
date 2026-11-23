@@ -150,6 +150,10 @@ let S=load()||defaults();
 /* v1.2: energy is now a percentage (ep). Old Low/Medium/High become 30/60/100. */
 Object.values(S.days).forEach(d=>{if(d.energy!=null&&d.ep==null)d.ep={1:30,2:60,3:100}[d.energy];delete d.energy});
 save();
+const WDS=['Mon','Tue','Wed','Thu','Fri','Sat','Sun'];
+const wdOf=k=>(parse(k).getDay()+6)%7; /* 0 = Monday */
+const onDay=(it,k)=>!it.days||it.days.length===7||it.days.includes(wdOf(k));
+function daysLabel(ds){if(!ds||ds.length===7)return '';const s=[...ds].sort().join();if(s==='0,1,2,3,4')return 'weekdays';if(s==='5,6')return 'weekends';return [...ds].sort().map(i=>WDS[i]).join(', ')}
 const lvlOf=ep=>ep==null?1:ep<=30?1:ep<=60?2:3;
 let tab='today', viewDay=todayKey(), sleepEdit=false, sleepDraft=null;
 let moodYear=parse(todayKey()).getFullYear(), moodSel=null;
@@ -160,7 +164,7 @@ const dayW=k=>S.days[k]||(S.days[k]={});
 const moodById=id=>S.moods.find(m=>m.id===id);
 function visibleItems(k){
   const d=day(k), lvl=lvlOf(d.ep), done=d.done||{};
-  return S.items.filter(it=>it.start<=k && (!it.end||k<=it.end) && (!it.deletedAt||k<it.deletedAt) && (it.level<=lvl||(done[it.id]||0)>0));
+  return S.items.filter(it=>it.start<=k && (onDay(it,k)||(done[it.id]||0)>0) && (!it.end||k<=it.end) && (!it.deletedAt||k<it.deletedAt) && (it.level<=lvl||(done[it.id]||0)>0));
 }
 function progress(k){
   const its=visibleItems(k), done=day(k).done||{};
@@ -206,9 +210,11 @@ function render(){
     .map(([t,i,l])=>`<button data-act="tab" data-v="${t}" class="${tab===t?'on':''}">${ic(i)}<span>${l}</span></button>`).join('');
 }
 
+const PET=['cutie','lovely','baby','sweetie','love','honey','sunshine','darling','pumpkin','buttercup','angel','girl'];
+function petName(k){let h=0;for(const c of k)h=(h*31+c.charCodeAt(0))>>>0;return PET[h%PET.length]} /* same name all day */
 function vToday(){
   const k=viewDay,t=todayKey(),d=day(k),isToday=k===t;
-  const greet=isToday?(()=>{const h=new Date().getHours();return h<4?'Hi, night owl':h<12?'Good morning':h<18?'Hi there':'Good evening'})():WD[parse(k).getDay()];
+  const greet=isToday?(()=>{const n=petName(k),h=new Date().getHours();return h>=4&&h<12?'Good morning, '+n:h>=18?'Good evening, '+n:'Hi '+n})():WD[parse(k).getDay()];
   let h=`<div class="top fade"><div><h1>${greet}</h1><div class="datenav"><button class="iconbtn" data-act="day" data-v="-1" aria-label="Previous day">${ic('left',18)}</button><span>${isToday?'Today, ':''}${fmtLong(k)}</span>${isToday?'':`<button class="iconbtn" data-act="day" data-v="1" aria-label="Next day">${ic('right',18)}</button><button class="btn ghost" style="padding:4px 8px;font-size:13px" data-act="goToday">back to today</button>`}</div></div><span id="dolphiwrap">${dolphiSVG(d.ep==null?null:lvlOf(d.ep))}</span></div>`;
 
   /* gentle backup note */
@@ -387,7 +393,7 @@ function vRoutines(){
     h+=`<div class="card"><div class="between"><p class="lbl" style="margin:0">${title}</p><button class="iconbtn" data-act="addItem" data-v="${lv}" aria-label="Add item">${ic('plus',20)}</button></div>`;
     if(!its.length)h+=`<div class="hint" style="padding:6px 0">Nothing yet</div>`;
     its.forEach(it=>{const ended=it.end&&it.end<t;
-      const meta=[it.times>1?it.times+'× a day':'',it.end?(ended?'ended ':'until ')+fmtLong(it.end):'',it.start>t?'starts '+fmtLong(it.start):''].filter(Boolean).join(' · ');
+      const meta=[daysLabel(it.days),it.times>1?it.times+'× a day':'',it.end?(ended?'ended ':'until ')+fmtLong(it.end):'',it.start>t?'starts '+fmtLong(it.start):''].filter(Boolean).join(' · ');
       h+=`<button class="rt ${ended?'ended':''}" data-act="editItem" data-id="${it.id}"><span style="flex:1">${esc(it.name)}${meta?`<div class="meta">${meta}</div>`:''}</span>${ic('edit',16,'style="color:#7D7AA6"')}</button>`});
     h+=`</div>`;
   });
@@ -400,7 +406,7 @@ function vRoutines(){
   h+=`<div class="card"><p class="lbl">Backup</p><div class="hint" style="margin-bottom:10px">Everything is saved only on this phone. A backup is one small file you can keep in Drive or anywhere safe.<br>Last backup: ${lb?fmtLong(lb):'not yet'}</div>
   <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-act="export">Save backup</button><button class="btn" data-act="import">Restore from file</button></div>
   <input type="file" id="importfile" accept=".json,application/json" style="display:none"></div>
-  <div class="hint" style="text-align:center;margin:10px 0 4px">Dolphi v1.2 · made for you</div>`;
+  <div class="hint" style="text-align:center;margin:10px 0 4px">Dolphi v1.4 · made for you</div>`;
   return h;
 }
 
@@ -414,6 +420,7 @@ function itemSheet(){
   <div class="field"><input id="itName" value="${esc(e.name)}" placeholder="Drink water" maxlength="40"></div>
   <div class="field"><p class="lbl">Shows on</p><div class="pills">${[[1,'Low'],[2,'Medium'],[3,'High']].map(([v,l])=>`<button class="pill ${e.level===v?'on':''}" data-act="dLevel" data-v="${v}">${l}</button>`).join('')}</div></div>
   <div class="field"><p class="lbl">Times a day</p><div class="pills">${[1,2,3].map(v=>`<button class="pill ${e.times===v?'on':''}" data-act="dTimes" data-v="${v}">${v}</button>`).join('')}</div></div>
+  <div class="field"><p class="lbl">Days</p><div class="pills" style="gap:4px">${WDS.map((w,i)=>`<button class="pill ${e.days.includes(i)?'on':''}" style="font-size:12px;padding:9px 0" data-act="dDay" data-v="${i}">${w[0]}</button>`).join('')}</div><div class="small" id="dayErr" style="margin-top:6px">${e.days.length===7?'Every day':daysLabel(e.days)?'Only on '+daysLabel(e.days):''}</div></div>
   <div class="field"><p class="lbl">Ends</p><div class="pills" style="margin-bottom:8px"><button class="pill ${!e.end?'on':''}" data-act="dEnd" data-v="none">No end</button><button class="pill" data-act="dEnd" data-v="20">In 20 days</button></div><input type="date" id="itEnd" value="${e.end||''}"></div>
   <div class="row" style="justify-content:space-between;margin-top:6px">${isNew?'<span></span>':'<button class="btn ghost" data-act="askDel">Remove</button>'}<span class="row"><button class="btn ghost" data-act="closeSheet">Cancel</button><button class="btn primary" data-act="saveItem">Save</button></span></div>
   <div id="delask"></div>`);
@@ -461,17 +468,18 @@ document.addEventListener('click',ev=>{
     case 'insMode':insMode=v;insOff=0;insSel=null;break;
     case 'insOff':insOff=Math.min(0,insOff+ +v);insSel=null;break;
     case 'insDay':insSel=insSel===k?null:k;break;
-    case 'addItem':editDraft={id:null,name:'',level:+v,times:1,end:null};itemSheet();return;
-    case 'editItem':{const it=S.items.find(x=>x.id===id);editDraft={...it};itemSheet();return}
-    case 'dLevel':case 'dTimes':case 'dEnd':{
+    case 'addItem':editDraft={id:null,name:'',level:+v,times:1,end:null,days:[0,1,2,3,4,5,6]};itemSheet();return;
+    case 'editItem':{const it=S.items.find(x=>x.id===id);editDraft={...it,days:it.days?[...it.days]:[0,1,2,3,4,5,6]};itemSheet();return}
+    case 'dLevel':case 'dTimes':case 'dEnd':case 'dDay':{
       editDraft.name=document.getElementById('itName').value;editDraft.end=document.getElementById('itEnd').value||null;
+      if(a==='dDay'){const i=+v,ds=editDraft.days;if(ds.includes(i)){if(ds.length>1)ds.splice(ds.indexOf(i),1)}else ds.push(i)}
       if(a==='dLevel')editDraft.level=+v;if(a==='dTimes')editDraft.times=+v;
       if(a==='dEnd')editDraft.end=v==='none'?null:addDays(todayKey(),19);
       itemSheet();return}
     case 'saveItem':{const nm=document.getElementById('itName').value.trim();if(!nm){document.getElementById('itName').focus();return}
       editDraft.name=nm;editDraft.end=document.getElementById('itEnd').value||null;
-      if(editDraft.id){const it=S.items.find(x=>x.id===editDraft.id);Object.assign(it,{name:nm,level:editDraft.level,times:editDraft.times,end:editDraft.end})}
-      else S.items.push({id:uid(),name:nm,level:editDraft.level,times:editDraft.times,start:todayKey(),end:editDraft.end,deletedAt:null});
+      if(editDraft.id){const it=S.items.find(x=>x.id===editDraft.id);Object.assign(it,{name:nm,level:editDraft.level,times:editDraft.times,end:editDraft.end,days:editDraft.days.length===7?null:[...editDraft.days].sort()})}
+      else S.items.push({id:uid(),name:nm,level:editDraft.level,times:editDraft.times,start:todayKey(),end:editDraft.end,days:editDraft.days.length===7?null:[...editDraft.days].sort(),deletedAt:null});
       save();closeSheet();break}
     case 'askDel':document.getElementById('delask').innerHTML=`<div class="card" style="margin:14px 0 0;background:#3E3C5E"><div class="hint" style="margin-bottom:10px">Remove "${esc(editDraft.name)}"? Days you already logged keep it.</div><div class="row"><button class="btn" data-act="doDel">Remove</button><button class="btn ghost" data-act="noDel">Keep it</button></div></div>`;return;
     case 'noDel':document.getElementById('delask').innerHTML='';return;

@@ -1,5 +1,5 @@
 // Dolphi offline helper: keeps the app working without internet.
-const CACHE = 'dolphi-v1.2';
+const CACHE = 'dolphi-v1.4';
 const SHELL = ['./', 'index.html', 'manifest.webmanifest', 'icon-192.png', 'icon-512.png', 'icon-maskable-512.png'];
 
 self.addEventListener('install', e => {
