@@ -63,9 +63,11 @@ h1{font-size:22px;font-weight:700;margin:0}
 nav{position:fixed;left:0;right:0;bottom:0;background:var(--bg);border-top:1px solid var(--pill);display:flex;justify-content:space-around;padding:8px 0 calc(8px + env(safe-area-inset-bottom));z-index:5}
 nav button{display:flex;flex-direction:column;align-items:center;gap:2px;font-size:11px;color:var(--muted);width:72px}
 nav button.on{color:var(--sage)}
-.ygrid{display:grid;grid-template-columns:16px repeat(31,1fr);gap:2px;align-items:center}
-.ygrid .ml{font-size:10px;color:var(--text2)}
-.cell{aspect-ratio:1;border-radius:2px;background:#46446A}
+.ygrid{display:grid;grid-template-columns:20px repeat(12,1fr);gap:3px;align-items:center}
+.ygrid .ml{font-size:11px;color:var(--text2);text-align:center;margin-bottom:2px}
+.ygrid .ml.now{color:var(--text);font-weight:700}
+.ygrid .dl{font-size:10px;color:var(--text2);text-align:right;padding-right:4px;line-height:1}
+.cell{aspect-ratio:1.6;border-radius:3px;background:#46446A}
 .cell.x{background:transparent}
 .cell.fut{background:transparent;box-shadow:inset 0 0 0 1px #4E4C74}
 .cell.sel{box-shadow:0 0 0 1.5px var(--text)}
@@ -246,15 +248,18 @@ function vMood(){
   const t=todayKey(),y=moodYear;
   let h=`<div class="top fade"><h1>Mood</h1><div class="datenav"><button class="iconbtn" data-act="year" data-v="-1" aria-label="Previous year">${ic('left',18)}</button><span>${y}</span><button class="iconbtn" data-act="year" data-v="1" aria-label="Next year">${ic('right',18)}</button></div></div>`;
   h+=`<div class="card"><div class="ygrid">`;
-  for(let m=0;m<12;m++){
-    h+=`<span class="ml">${MON[m][0]}</span>`;
-    const dim=new Date(y,m+1,0).getDate();
-    for(let dd=1;dd<=31;dd++){
+  const td=parse(t),curM=td.getFullYear()===y?td.getMonth():-1;
+  h+=`<span></span>`;
+  for(let m=0;m<12;m++)h+=`<span class="ml ${m===curM?'now':''}">${MON[m][0]}</span>`;
+  for(let dd=1;dd<=31;dd++){
+    h+=`<span class="dl">${dd===1||dd%5===0?dd:''}</span>`;
+    for(let m=0;m<12;m++){
+      const dim=new Date(y,m+1,0).getDate();
       if(dd>dim){h+=`<span class="cell x"></span>`;continue}
       const k=y+'-'+pad(m+1)+'-'+pad(dd);
       if(k>t){h+=`<span class="cell fut"></span>`;continue}
       const mo=moodById(day(k).mood);
-      h+=`<button class="cell ${moodSel===k?'sel':''}" style="${mo?'background:'+mo.color:''}" data-act="moodDay" data-k="${k}" aria-label="${fmtLong(k)}"></button>`;
+      h+=`<button class="cell ${moodSel===k||(!moodSel&&k===t)?'sel':''}" style="${mo?'background:'+mo.color:''}" data-act="moodDay" data-k="${k}" aria-label="${fmtLong(k)}"></button>`;
     }
   }
   h+=`</div></div>`;
@@ -381,7 +386,7 @@ function vRoutines(){
   h+=`<div class="card"><p class="lbl">Backup</p><div class="hint" style="margin-bottom:10px">Everything is saved only on this phone. A backup is one small file you can keep in Drive or anywhere safe.<br>Last backup: ${lb?fmtLong(lb):'not yet'}</div>
   <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-act="export">Save backup</button><button class="btn" data-act="import">Restore from file</button></div>
   <input type="file" id="importfile" accept=".json,application/json" style="display:none"></div>
-  <div class="hint" style="text-align:center;margin:10px 0 4px">Dolphi v1 · made for you</div>`;
+  <div class="hint" style="text-align:center;margin:10px 0 4px">Dolphi v1.1 · made for you</div>`;
   return h;
 }
 
@@ -410,12 +415,12 @@ function bubbles(el,big){
 function readDraftInputs(){const b=document.getElementById('bed'),w=document.getElementById('wake');if(b&&sleepDraft){sleepDraft.bed=b.value||sleepDraft.bed;sleepDraft.wake=w.value||sleepDraft.wake}}
 
 function exportBackup(){
-  const t=todayKey();S.settings.lastBackup=t;S.settings.snooze=null;save();
+  const t=todayKey();
   const blob=new Blob([JSON.stringify(S,null,1)],{type:'application/json'}),name='dolphi-backup-'+t+'.json';
   const file=new File([blob],name,{type:'application/json'});
-  const dl=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000)};
-  if(navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],title:'Dolphi backup'}).catch(err=>{if(err&&err.name!=='AbortError')dl()})}else dl();
-  render();
+  const done=()=>{S.settings.lastBackup=t;S.settings.snooze=null;save();render()};
+  const dl=()=>{const a=document.createElement('a');a.href=URL.createObjectURL(blob);a.download=name;document.body.appendChild(a);a.click();setTimeout(()=>{URL.revokeObjectURL(a.href);a.remove()},1000);done()};
+  if(navigator.canShare&&navigator.canShare({files:[file]})){navigator.share({files:[file],title:'Dolphi backup'}).then(done).catch(err=>{if(err&&err.name!=='AbortError')dl()})}else dl();
 }
 
 document.addEventListener('click',ev=>{
