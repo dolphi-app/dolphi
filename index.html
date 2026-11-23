@@ -34,6 +34,13 @@ h1{font-size:22px;font-weight:700;margin:0}
 .pills{display:flex;gap:6px}
 .pill{flex:1;text-align:center;padding:9px 0;border-radius:99px;background:var(--pill);font-size:14px;color:#D9D6F2;transition:background .2s}
 .pill.on{background:var(--sage);color:var(--sage-ink);font-weight:600}
+.ebig{font-size:24px;font-weight:700}
+#energy{-webkit-appearance:none;appearance:none;width:100%;height:12px;border-radius:99px;padding:0;border:0;background:linear-gradient(90deg,var(--sage) var(--p),var(--bg) var(--p));margin:10px 0 12px}
+#energy::-webkit-slider-thumb{-webkit-appearance:none;width:28px;height:28px;border-radius:50%;background:var(--text);border:3px solid var(--sage)}
+#energy.unset{background:var(--bg)}
+#energy.unset::-webkit-slider-thumb{border-color:var(--muted);background:var(--text2)}
+.zone{flex:1;text-align:center;padding:6px 0;border-radius:99px;font-size:13px;color:var(--text2);background:var(--pill)}
+.zone.on{background:var(--sage);color:var(--sage-ink);font-weight:600}
 .btn{display:inline-block;padding:10px 16px;border-radius:99px;background:var(--pill);font-size:14px}
 .btn.primary{background:var(--sage);color:var(--sage-ink);font-weight:600}
 .btn.ghost{background:transparent;color:var(--text2)}
@@ -139,7 +146,11 @@ const WAKE={none:'slept through',bit:'woke a bit',lot:'woke a lot'};
 const esc=s=>String(s==null?'':s).replace(/[&<>"']/g,c=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c]));
 
 /* ---------- state ---------- */
-let S=load()||defaults(); save();
+let S=load()||defaults();
+/* v1.2: energy is now a percentage (ep). Old Low/Medium/High become 30/60/100. */
+Object.values(S.days).forEach(d=>{if(d.energy!=null&&d.ep==null)d.ep={1:30,2:60,3:100}[d.energy];delete d.energy});
+save();
+const lvlOf=ep=>ep==null?1:ep<=30?1:ep<=60?2:3;
 let tab='today', viewDay=todayKey(), sleepEdit=false, sleepDraft=null;
 let moodYear=parse(todayKey()).getFullYear(), moodSel=null;
 let insMode='week', insOff=0, insSel=null;
@@ -148,7 +159,7 @@ const day=k=>S.days[k]||{};
 const dayW=k=>S.days[k]||(S.days[k]={});
 const moodById=id=>S.moods.find(m=>m.id===id);
 function visibleItems(k){
-  const d=day(k), lvl=d.energy||1, done=d.done||{};
+  const d=day(k), lvl=lvlOf(d.ep), done=d.done||{};
   return S.items.filter(it=>it.start<=k && (!it.end||k<=it.end) && (!it.deletedAt||k<it.deletedAt) && (it.level<=lvl||(done[it.id]||0)>0));
 }
 function progress(k){
@@ -198,7 +209,7 @@ function render(){
 function vToday(){
   const k=viewDay,t=todayKey(),d=day(k),isToday=k===t;
   const greet=isToday?(()=>{const h=new Date().getHours();return h<4?'Hi, night owl':h<12?'Good morning':h<18?'Hi there':'Good evening'})():WD[parse(k).getDay()];
-  let h=`<div class="top fade"><div><h1>${greet}</h1><div class="datenav"><button class="iconbtn" data-act="day" data-v="-1" aria-label="Previous day">${ic('left',18)}</button><span>${isToday?'Today, ':''}${fmtLong(k)}</span>${isToday?'':`<button class="iconbtn" data-act="day" data-v="1" aria-label="Next day">${ic('right',18)}</button><button class="btn ghost" style="padding:4px 8px;font-size:13px" data-act="goToday">back to today</button>`}</div></div>${dolphiSVG(d.energy)}</div>`;
+  let h=`<div class="top fade"><div><h1>${greet}</h1><div class="datenav"><button class="iconbtn" data-act="day" data-v="-1" aria-label="Previous day">${ic('left',18)}</button><span>${isToday?'Today, ':''}${fmtLong(k)}</span>${isToday?'':`<button class="iconbtn" data-act="day" data-v="1" aria-label="Next day">${ic('right',18)}</button><button class="btn ghost" style="padding:4px 8px;font-size:13px" data-act="goToday">back to today</button>`}</div></div><span id="dolphiwrap">${dolphiSVG(d.ep==null?null:lvlOf(d.ep))}</span></div>`;
 
   /* gentle backup note */
   const st=S.settings, logged=Object.keys(S.days).length;
@@ -220,11 +231,14 @@ function vToday(){
   }
 
   /* energy */
-  h+=`<div class="card"><p class="lbl">Energy ${isToday?'today':''}</p><div class="pills">${[[1,'Low'],[2,'Medium'],[3,'High']].map(([v,l])=>`<button class="pill ${d.energy===v?'on':''}" data-act="energy" data-v="${v}">${l}</button>`).join('')}</div></div>`;
+  const ep=d.ep;
+  h+=`<div class="card"><div class="between"><span class="lbl" style="margin:0">Energy ${isToday?'today':''}</span><span class="ebig" id="epv">${ep==null?'<span class="small" style="font-weight:400">slide to set</span>':ep+'%'}</span></div>
+  <input type="range" id="energy" min="0" max="100" step="10" value="${ep==null?50:ep}" class="${ep==null?'unset':''}" style="--p:${ep==null?0:ep}%" aria-label="Energy">
+  <div class="pills" id="zones">${['Low','Medium','High'].map((l,i)=>`<span class="zone ${ep!=null&&lvlOf(ep)===i+1?'on':''}">${l}</span>`).join('')}</div></div>`;
 
   /* list */
   const its=visibleItems(k),done=d.done||{},p=progress(k);
-  h+=`<div class="card" id="listcard"><p class="lbl">${isToday?'Today':'This day'}${its.length?' · '+p.n+' of '+p.total:''}${d.energy?'':' <span style="opacity:.8">(bare minimum until you pick energy)</span>'}</p>`;
+  h+=`<div class="card" id="listcard"><p class="lbl">${isToday?'Today':'This day'}${its.length?' · '+p.n+' of '+p.total:''}${d.ep!=null?'':' <span style="opacity:.8">(bare minimum until you set energy)</span>'}</p>`;
   if(!its.length)h+=`<div class="hint">Nothing here yet. Add things in Routines.</div>`;
   for(const it of its){
     const c=done[it.id]||0,full=c>=it.times;
@@ -272,7 +286,7 @@ function vMood(){
   if(!top.length)h+=`<div class="hint">No moods picked this month yet. Pick one on Today in the evening.</div>`;
   else{
     const names=top.slice(0,2).map(([id])=>(moodById(id)||{}).name).filter(Boolean).map(s=>s.toLowerCase());
-    h+=`<div style="margin-bottom:10px">Mostly ${names.join(' and ')}.</div><div>${top.map(([id,n])=>{const mo=moodById(id);return mo?`<span class="chip"><span class="sw" style="background:${mo.color}"></span>${esc(mo.name)} ${n}</span>`:''}).join('')}</div>`;
+    h+=`<div style="margin-bottom:10px">Mostly ${names.join(' and ')}.</div><div>${top.map(([id,n])=>{const mo=moodById(id);return mo?`<span class="chip"><span class="sw" style="background:${mo.color}"></span>${esc(mo.name)} · ${n} ${n===1?'day':'days'}</span>`:''}).join('')}</div>`;
   }
   h+=`</div>`;
   if(moodSel)h+=dayDetail(moodSel);
@@ -284,9 +298,9 @@ function dayDetail(k){
   const d=day(k),mo=moodById(d.mood),done=d.done||{};
   const did=S.items.filter(it=>(done[it.id]||0)>0).map(it=>esc(it.name)+(it.times>1?` ${done[it.id]}/${it.times}`:''));
   let h=`<div class="card fade"><div class="between"><p class="lbl" style="margin:0">${fmtShort(k)}</p><button class="btn ghost" style="padding:2px 4px;font-size:13px" data-act="openDay" data-k="${k}">edit day</button></div>`;
-  if(!mo&&!d.energy&&!d.sleep&&!did.length&&!d.note){return h+`<div class="hint">Nothing logged on this day, and that's okay.</div></div>`}
+  if(!mo&&d.ep==null&&!d.sleep&&!did.length&&!d.note){return h+`<div class="hint">Nothing logged on this day, and that's okay.</div></div>`}
   if(mo)h+=`<div class="chip" style="margin-top:6px"><span class="sw" style="background:${mo.color}"></span>${esc(mo.name)}</div>`;
-  if(d.energy)h+=`<span class="chip">Energy: ${['','low','medium','high'][d.energy]}</span>`;
+  if(d.ep!=null)h+=`<span class="chip">Energy: ${d.ep}%</span>`;
   if(d.sleep)h+=`<div class="small">Sleep ${fmtDur(dur(d.sleep.bed,d.sleep.wake))} · ${d.sleep.bed} → ${d.sleep.wake} · ${WAKE[d.sleep.waking]}</div>`;
   if(did.length)h+=`<div class="small" style="margin-top:4px">Did: ${did.join(', ')}</div>`;
   if(d.note)h+=`<div class="note">${esc(d.note)}</div>`;
@@ -334,7 +348,7 @@ function vInsights(){
   h+=`</div>`;
 
   /* energy trend */
-  const pts=ks.map((k,i)=>{const e=day(k).energy;return e?{i,v:e/3*100}:null}).filter(Boolean);
+  const pts=ks.map((k,i)=>{const e=day(k).ep;return e!=null?{i,v:e}:null}).filter(Boolean);
   const avg=pts.length?Math.round(pts.reduce((a,p)=>a+p.v,0)/pts.length):null;
   h+=`<div class="card"><div class="between" style="margin-bottom:6px"><span style="font-weight:700">Energy</span><span class="small">${avg!=null?'avg '+avg+'%':'not logged yet'}</span></div>`;
   const EH=120,EB=14,EY=v=>4+(100-v)/100*(EH-4-EB),EX=i=>L+i*cw+cw/2;
@@ -386,7 +400,7 @@ function vRoutines(){
   h+=`<div class="card"><p class="lbl">Backup</p><div class="hint" style="margin-bottom:10px">Everything is saved only on this phone. A backup is one small file you can keep in Drive or anywhere safe.<br>Last backup: ${lb?fmtLong(lb):'not yet'}</div>
   <div class="row" style="flex-wrap:wrap"><button class="btn primary" data-act="export">Save backup</button><button class="btn" data-act="import">Restore from file</button></div>
   <input type="file" id="importfile" accept=".json,application/json" style="display:none"></div>
-  <div class="hint" style="text-align:center;margin:10px 0 4px">Dolphi v1.1 · made for you</div>`;
+  <div class="hint" style="text-align:center;margin:10px 0 4px">Dolphi v1.2 · made for you</div>`;
   return h;
 }
 
@@ -436,7 +450,6 @@ document.addEventListener('click',ev=>{
     case 'saveSleep':readDraftInputs();dayW(viewDay).sleep={...sleepDraft};sleepEdit=false;sleepDraft=null;save();break;
     case 'editSleep':sleepEdit=true;sleepDraft=null;break;
     case 'cancelSleep':sleepEdit=false;sleepDraft=null;break;
-    case 'energy':readDraftInputs();dayW(viewDay).energy=(day(viewDay).energy===+v?undefined:+v);save();break;
     case 'tick':{readDraftInputs();const d=dayW(viewDay);d.done=d.done||{};const it=S.items.find(x=>x.id===id);const c=d.done[id]||0;
       const nc=c>=it.times?0:c+1;if(nc)d.done[id]=nc;else delete d.done[id];save();render();
       if(nc){const p=progress(viewDay);const all=p.n===p.total&&nc>=it.times;
@@ -487,10 +500,15 @@ document.addEventListener('change',ev=>{
     });
   }
   if(t.dataset.moodColor){S.moods.find(m=>m.id===t.dataset.moodColor).color=t.value;save()}
+  if(t.id==='energy'){const y=window.scrollY;render();window.scrollTo(0,y)}
 });
 document.addEventListener('input',ev=>{
   const t=ev.target;
   if(t.id==='note'){const d=dayW(viewDay);d.note=t.value;save()}
+  if(t.id==='energy'){const v=+t.value;readDraftInputs();dayW(viewDay).ep=v;save();t.classList.remove('unset');t.style.setProperty('--p',v+'%');
+    document.getElementById('epv').textContent=v+'%';
+    document.querySelectorAll('#zones .zone').forEach((z,i)=>z.classList.toggle('on',lvlOf(v)===i+1));
+    document.getElementById('dolphiwrap').innerHTML=dolphiSVG(lvlOf(v))}
   if(t.id==='bed'||t.id==='wake'){readDraftInputs();const h=document.getElementById('hrs');if(h)h.textContent=fmtDur(dur(sleepDraft.bed,sleepDraft.wake))}
   if(t.dataset.moodName){S.moods.find(m=>m.id===t.dataset.moodName).name=t.value||'Mood';save()}
   if(t.dataset.moodColor){S.moods.find(m=>m.id===t.dataset.moodColor).color=t.value;save()}
